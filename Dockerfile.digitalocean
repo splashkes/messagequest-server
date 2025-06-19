@@ -1,0 +1,37 @@
+# DigitalOcean App Platform Dockerfile for MessageQuest Server
+# This runs the Supabase Edge Functions and serves as the API backend
+
+FROM node:18-alpine
+
+# Install dependencies for Supabase CLI
+RUN apk add --no-cache \
+    bash \
+    curl \
+    git
+
+# Install Supabase CLI
+RUN npm install -g supabase
+
+# Install Deno for Edge Functions
+RUN curl -fsSL https://deno.land/x/install/install.sh | sh
+ENV DENO_INSTALL="/root/.deno"
+ENV PATH="$DENO_INSTALL/bin:$PATH"
+
+# Set working directory
+WORKDIR /app
+
+# Copy Supabase functions
+COPY supabase/functions ./supabase/functions
+
+# Copy configuration files
+COPY package*.json ./
+COPY server.js ./
+
+# Install Node dependencies
+RUN npm ci --only=production
+
+# Expose port for health checks
+EXPOSE 8080
+
+# Start the server
+CMD ["node", "server.js"]

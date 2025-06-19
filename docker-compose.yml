@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  pocketbase:
+    build: .
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./pb_data:/pb/pb_data
+      - ./pb_public:/pb/pb_public
+    environment:
+      - ENVIRONMENT=development
+    restart: unless-stopped
+
+  # For local development with PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: pocketbase
+      POSTGRES_PASSWORD: pocketbase_dev_password
+      POSTGRES_DB: messagequest
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres_data:

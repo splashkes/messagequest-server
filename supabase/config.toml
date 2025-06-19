@@ -1,0 +1,20 @@
+# Supabase CLI configuration for local development
+
+[api]
+port = 54321
+schemas = ["public", "auth", "storage"]
+
+[auth]
+site_url = "messagequest://auth"
+additional_redirect_urls = ["https://messagequest.com/auth/callback"]
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+port = 54323
