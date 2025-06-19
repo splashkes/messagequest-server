@@ -1,46 +1,116 @@
 # MessageQuest Server
 
-Backend server for the MessageQuest immersive role-play messaging app.
+Supabase backend for the MessageQuest immersive role-play messaging app.
 
-## Architecture Decision
+## Architecture
 
-Since PocketBase only supports SQLite and DigitalOcean App Platform doesn't provide persistent storage, we're using **Supabase** for our backend:
+MessageQuest uses **Supabase** as a complete backend solution:
 
-- ✅ PostgreSQL database (persistent)
-- ✅ Real-time subscriptions (WebSockets)
-- ✅ Authentication (Email + Apple Sign In)
-- ✅ Row Level Security
-- ✅ Edge Functions for custom logic
-- ✅ Built-in connection pooling
+- ✅ PostgreSQL database with full schema
+- ✅ Real-time subscriptions for live messaging
+- ✅ Authentication (Email/Password + Apple Sign In)
+- ✅ Row Level Security for data protection
+- ✅ Edge Functions for push notifications and AI responses
+- ✅ Auto-generated REST APIs
+- ✅ Global CDN distribution
 
 ## Quick Start
 
-### Option 1: Supabase Cloud (Recommended)
+### Prerequisites
 
-1. Create a project at [supabase.com](https://supabase.com)
-2. Run the migrations in `supabase/migrations/`
-3. Deploy Edge Functions from `supabase/functions/`
-4. Update your iOS app with the Supabase URL and anon key
+1. [Supabase CLI](https://supabase.com/docs/guides/cli) installed
+2. A Supabase project at [supabase.com](https://supabase.com)
+3. Environment variables (see below)
 
-### Option 2: Self-hosted Supabase on DigitalOcean
+### Setup Steps
 
-1. Copy `app.yaml.example` to `app.yaml`
-2. Update all the environment variables
-3. Deploy with: `doctl apps create --spec app.yaml`
+1. **Link to your Supabase project:**
+   ```bash
+   supabase link --project-ref YOUR_PROJECT_REF
+   ```
 
-### Option 3: Custom Backend on DigitalOcean
+2. **Run database migrations:**
+   ```bash
+   supabase db push
+   ```
 
-Use the `custom-backend/` directory for a pure Go + PostgreSQL solution.
+3. **Deploy Edge Functions:**
+   ```bash
+   supabase functions deploy
+   ```
+
+4. **Update your iOS app** with:
+   - Supabase URL: `https://YOUR_PROJECT_REF.supabase.co`
+   - Anon Key: Found in your Supabase dashboard
 
 ## Features
 
-- User authentication (Email/Password + Sign in with Apple)
-- Character management with real-time availability
-- Chat messaging with typing indicators
-- Push notifications (APNs)
-- AI-powered response suggestions
-- Character objective tracking
+- **Authentication**: Email/Password + Apple Sign In
+- **Real-time Messaging**: Instant message delivery with typing indicators
+- **Character System**: Dynamic character availability and selection
+- **Push Notifications**: iOS push via APNs Edge Function
+- **AI Integration**: OpenAI-powered response suggestions
+- **Security**: Row Level Security on all tables
+
+## Project Structure
+
+```
+mq-server/
+├── supabase/
+│   ├── config.toml           # Supabase configuration
+│   ├── seed.sql             # Sample data for development
+│   ├── migrations/          # Database schema
+│   │   ├── 001_initial_schema.sql
+│   │   ├── 002_row_level_security.sql
+│   │   └── 003_realtime_and_functions.sql
+│   └── functions/           # Edge Functions
+│       ├── send-push-notification/
+│       └── generate-ai-responses/
+└── README.md
+```
 
 ## Environment Variables
 
-See `.env.example` for required configuration.
+Set these in your Supabase dashboard under Settings > Edge Functions:
+
+- `APNS_KEY_ID`: Apple Push Notification Service key ID
+- `APNS_TEAM_ID`: Your Apple Developer Team ID  
+- `APNS_BUNDLE_ID`: Your iOS app bundle identifier
+- `APNS_PRIVATE_KEY`: Contents of your .p8 key file
+- `OPENAI_API_KEY`: For AI response generation
+
+## Database Schema
+
+The database includes tables for:
+- `profiles`: User profiles and metadata
+- `characters`: Available characters with traits and objectives
+- `chats`: Chat rooms (direct and group)
+- `messages`: All messages with read receipts
+- `character_objectives`: Character goals and secrets
+- `user_characters`: Character assignments
+- `chat_participants`: Chat membership
+
+## Development
+
+### Local Development
+
+```bash
+# Start local Supabase
+supabase start
+
+# Apply migrations
+supabase db reset
+
+# Serve functions locally
+supabase functions serve
+```
+
+### Testing Edge Functions
+
+```bash
+# Test push notification
+curl -i --location --request POST 'http://localhost:54321/functions/v1/send-push-notification' \
+  --header 'Authorization: Bearer YOUR_ANON_KEY' \
+  --header 'Content-Type: application/json' \
+  --data '{"userId": "user123", "message": "Test notification"}'
+```
