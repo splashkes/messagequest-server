@@ -6,7 +6,8 @@ const APNS_KEY_ID = Deno.env.get('APNS_KEY_ID')!
 const APNS_TEAM_ID = Deno.env.get('APNS_TEAM_ID')!
 const APNS_BUNDLE_ID = Deno.env.get('APNS_BUNDLE_ID')!
 const APNS_PRIVATE_KEY = Deno.env.get('APNS_PRIVATE_KEY')!
-const APNS_PRODUCTION = Deno.env.get('APNS_PRODUCTION') === 'true'
+// Force production for TestFlight
+const APNS_PRODUCTION = true // Deno.env.get('APNS_PRODUCTION') === 'true'
 
 interface PushPayload {
   userId?: string
@@ -22,10 +23,27 @@ interface PushPayload {
 async function pemToCryptoKey(pem: string) {
   const pemHeader = "-----BEGIN PRIVATE KEY-----"
   const pemFooter = "-----END PRIVATE KEY-----"
-  const pemContents = pem.substring(
-    pemHeader.length,
-    pem.length - pemFooter.length - 1,
-  ).replace(/\s/g, '')
+  
+  // Trim any whitespace and normalize line endings
+  const normalizedPem = pem.trim().replace(/\r\n/g, '\n')
+  
+  // Extract the base64 content between header and footer
+  const headerIndex = normalizedPem.indexOf(pemHeader)
+  const footerIndex = normalizedPem.indexOf(pemFooter)
+  
+  if (headerIndex === -1 || footerIndex === -1) {
+    throw new Error('Invalid PEM format')
+  }
+  
+  const pemContents = normalizedPem
+    .substring(headerIndex + pemHeader.length, footerIndex)
+    .replace(/\s/g, '') // Remove all whitespace
+  
+  console.log('PEM processing:', {
+    originalLength: pem.length,
+    normalizedLength: normalizedPem.length,
+    base64Length: pemContents.length
+  })
   
   const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0))
   
@@ -76,16 +94,44 @@ serve(async (req) => {
     }
 
     // Create JWT for APNS
+    console.log('APNS Config:', {
+      keyId: APNS_KEY_ID,
+      teamId: APNS_TEAM_ID,
+      bundleId: APNS_BUNDLE_ID,
+      production: APNS_PRODUCTION,
+      privateKeyLength: APNS_PRIVATE_KEY?.length,
+      privateKeyStart: APNS_PRIVATE_KEY?.substring(0, 50)
+    })
+    
+    // Validate the values match expected
+    if (APNS_KEY_ID !== 'J48BV28YFZ') {
+      console.error('Unexpected APNS_KEY_ID:', APNS_KEY_ID)
+    }
+    if (APNS_TEAM_ID !== 'BDV8CS4763') {
+      console.error('Unexpected APNS_TEAM_ID:', APNS_TEAM_ID)
+    }
+    if (APNS_BUNDLE_ID !== 'artbattle.MessageQuest') {
+      console.error('Unexpected APNS_BUNDLE_ID:', APNS_BUNDLE_ID)
+    }
+    
     const key = await pemToCryptoKey(APNS_PRIVATE_KEY)
+    
+    const now = Math.floor(Date.now() / 1000)
+    const jwtPayload = { 
+      iss: APNS_TEAM_ID,
+      iat: now,
+      exp: now + 3600, // Token expires in 1 hour
+    }
+    
+    console.log('JWT payload:', jwtPayload)
     
     const jwt = await create(
       { alg: "ES256", typ: "JWT", kid: APNS_KEY_ID },
-      { 
-        iss: APNS_TEAM_ID,
-        iat: getNumericDate(0),
-      },
+      jwtPayload,
       key
     )
+    
+    console.log('JWT created, length:', jwt.length)
 
     // Send to each token
     const results = await Promise.allSettled(
@@ -93,19 +139,33 @@ serve(async (req) => {
         const endpoint = APNS_PRODUCTION
           ? `https://api.push.apple.com/3/device/${deviceToken}`
           : `https://api.sandbox.push.apple.com/3/device/${deviceToken}`
+        
+        console.log(`Using APNS endpoint: ${endpoint}`)
 
         const payload = {
           aps: {
             alert: {
-              title,
-              body,
+              title: title || 'MessageQuest',
+              body: body || 'You have a new message',
             },
-            badge: badge || 0,
+            badge: badge !== undefined ? badge : 1,
             sound: sound || 'default',
+            'content-available': 1,
           },
           ...data,
         }
+        
+        console.log('Sending payload:', JSON.stringify(payload))
 
+        // Log the full request details
+        console.log('APNS Request:', {
+          endpoint: endpoint.substring(0, 50) + '...',
+          bundleId: APNS_BUNDLE_ID,
+          jwtHeader: jwt.split('.')[0],
+          teamId: APNS_TEAM_ID,
+          keyId: APNS_KEY_ID
+        })
+        
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
@@ -117,6 +177,12 @@ serve(async (req) => {
           },
           body: JSON.stringify(payload),
         })
+        
+        // Log the response headers for debugging
+        if (!response.ok) {
+          console.log(`APNS Response Status: ${response.status}`)
+          console.log(`APNS Response Headers:`, Object.fromEntries(response.headers.entries()))
+        }
 
         if (!response.ok) {
           const errorText = await response.text()
